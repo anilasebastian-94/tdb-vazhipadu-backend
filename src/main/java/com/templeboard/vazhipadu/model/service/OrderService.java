@@ -23,7 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,22 +43,60 @@ public class OrderService {
         order.setNakshatra(request.getNakshatra());
         order.setBookingDate(request.getBookingDate());
         BigDecimal total = BigDecimal.ZERO;
-
-        for (OrderItemDto itemRequest : request.getItems()) {
+        Map<Long, Integer> requestedQuantities = request.getItems()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        OrderItemDto::getOfferingId,
+                        TreeMap::new,
+                        Collectors.summingInt(
+                                OrderItemDto::getQuantity
+                        )
+                ));
+        Map<Long, Offering> lockedOfferings = new LinkedHashMap<>();
+        for (Long offeringId : requestedQuantities.keySet()) {
             Offering offering = offeringRepository
-                    .findById(itemRequest.getOfferingId())
+                    .findById(offeringId)
                     .orElseThrow(() -> new BusinessException(
                             HttpStatus.NOT_FOUND,
-                            "Offering not found: "
-                                    + itemRequest.getOfferingId()
+                            "Offering not found: " + offeringId
                     ));
-
             if (!offering.isActive()) {
                 throw new BusinessException(
                         HttpStatus.BAD_REQUEST,
                         "Offering is inactive: " + offering.getName()
                 );
             }
+            lockedOfferings.put(offeringId, offering);
+        }
+        for (Map.Entry<Long, Integer> entry
+                : requestedQuantities.entrySet()) {
+            Long offeringId = entry.getKey();
+            int requestedQuantity = entry.getValue();
+            Offering offering = lockedOfferings.get(offeringId);
+            Integer dailyLimit = offering.getDailyLimit();
+            if (dailyLimit == null) {
+                continue;
+            }
+            long alreadyBooked = orderRepository.countBookedQuantity(
+                    offeringId,
+                    request.getBookingDate()
+            );
+            if (alreadyBooked + requestedQuantity > dailyLimit) {
+                throw new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "Daily limit exceeded for offering: "
+                                + offering.getName()
+                                + ". Limit: " + dailyLimit
+                                + ", already booked: " + alreadyBooked
+                                + ", requested: " + requestedQuantity
+                );
+            }
+        }
+        for (OrderItemDto itemRequest : request.getItems()) {
+
+            Offering offering = lockedOfferings.get(
+                    itemRequest.getOfferingId()
+            );
             BigDecimal unitPrice = offering.getPrice();
             BigDecimal subtotal = unitPrice.multiply(
                     BigDecimal.valueOf(itemRequest.getQuantity())
@@ -70,7 +112,9 @@ public class OrderService {
         order.setTotalAmount(total);
         order.setTempleId(request.getTempleId());
         order.setOrderStatus(OrderStatus.PENDING);
+
         VazhipaduOrder savedOrder = orderRepository.save(order);
+
         return toResponse(savedOrder);
     }
 

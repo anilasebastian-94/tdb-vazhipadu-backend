@@ -21,11 +21,14 @@ public class OfferingDto {
 
     private Boolean active;
 
+    private Integer dailyLimit;
+
     public Offering toEntity() {
         Offering offering = new Offering();
         offering.setName(this.name);
         offering.setPrice(this.price);
         offering.setActive(this.active != null ? this.active : true);
+        offering.setDailyLimit(this.dailyLimit);
         return offering;
     }
 }
