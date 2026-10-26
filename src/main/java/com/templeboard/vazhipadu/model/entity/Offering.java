@@ -26,12 +26,16 @@ public class Offering {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "daily_limit")
+    private Integer dailyLimit;
+
     public OfferingDto toDto() {
         OfferingDto dto = new OfferingDto();
         dto.setId(this.id);
         dto.setName(this.name);
         dto.setPrice(this.price);
         dto.setActive(this.active);
+        dto.setDailyLimit(this.dailyLimit);
         return dto;
     }
 }
