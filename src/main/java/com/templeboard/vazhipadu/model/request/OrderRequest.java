@@ -1,7 +1,6 @@
 package com.templeboard.vazhipadu.model.request;
 
 import com.templeboard.vazhipadu.model.dto.OrderItemDto;
-import com.templeboard.vazhipadu.model.entity.VazhipaduOrder;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
@@ -34,5 +33,8 @@ public class OrderRequest {
 
     @NotEmpty(message = "At least one offering is required")
     List<@Valid OrderItemDto> items;
+
+    @NotNull(message = "Temple ID is required")
+   private Long templeId;
 
 }
