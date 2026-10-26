@@ -1,5 +1,6 @@
 package com.templeboard.vazhipadu.model.entity;
 
+import com.templeboard.vazhipadu.model.enums.OrderStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -43,6 +44,13 @@ public class VazhipaduOrder {
             orphanRemoval = true
     )
     private List<OrderItem> items = new ArrayList<>();
+
+    @Column(name = "temple_id", nullable = false)
+    private Long templeId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_status", nullable = false, length = 20)
+    private OrderStatus orderStatus = OrderStatus.PENDING;
 
     public void addItem(OrderItem item) {
         items.add(item);

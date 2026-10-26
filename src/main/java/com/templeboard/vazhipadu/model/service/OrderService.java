@@ -5,17 +5,24 @@ import com.templeboard.vazhipadu.model.dto.OrderItemDto;
 import com.templeboard.vazhipadu.model.entity.Offering;
 import com.templeboard.vazhipadu.model.entity.OrderItem;
 import com.templeboard.vazhipadu.model.entity.VazhipaduOrder;
+import com.templeboard.vazhipadu.model.enums.OrderStatus;
 import com.templeboard.vazhipadu.model.exception.BusinessException;
 import com.templeboard.vazhipadu.model.repository.OfferingRepository;
 import com.templeboard.vazhipadu.model.repository.VazhipaduOrderRepository;
 import com.templeboard.vazhipadu.model.request.OrderItemRequest;
 import com.templeboard.vazhipadu.model.request.OrderRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -48,12 +55,10 @@ public class OrderService {
                         "Offering is inactive: " + offering.getName()
                 );
             }
-
             BigDecimal unitPrice = offering.getPrice();
             BigDecimal subtotal = unitPrice.multiply(
                     BigDecimal.valueOf(itemRequest.getQuantity())
             );
-
             total = total.add(subtotal);
             OrderItem orderItem = new OrderItem(
                     offering,
@@ -63,6 +68,8 @@ public class OrderService {
             order.addItem(orderItem);
         }
         order.setTotalAmount(total);
+        order.setTempleId(request.getTempleId());
+        order.setOrderStatus(OrderStatus.PENDING);
         VazhipaduOrder savedOrder = orderRepository.save(order);
         return toResponse(savedOrder);
     }
@@ -104,5 +111,51 @@ public class OrderService {
                 items,
                 order.getTotalAmount()
         );
+    }
+    @Transactional(readOnly = true)
+    public Page<VazhipaduOrder> search(
+            Long templeId,
+            LocalDate bookingDate,
+            OrderStatus status,
+            String phoneNumber,
+            int page,
+            int size) {
+        if (templeId == null || templeId <= 0) {
+            throw new IllegalArgumentException(
+                    "A valid templeId is required");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException(
+                    "Page must be zero or greater");
+        }
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and 100");
+        }
+        Specification<VazhipaduOrder> spec =
+                (root, query, cb) ->
+                        cb.equal(root.get("templeId"), templeId);
+        if (bookingDate != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("bookingDate"), bookingDate));
+        }
+        if (status != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("status"), status));
+        }
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            String phone = phoneNumber.trim();
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("phoneNumber"), phone));
+        }
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        Sort.Order.desc("bookingDate"),
+                        Sort.Order.desc("id")
+                )
+        );
+        return orderRepository.findAll(spec, pageable);
     }
 }
